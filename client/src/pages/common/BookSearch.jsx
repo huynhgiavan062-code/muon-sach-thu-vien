@@ -1,5 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { bookApi } from '../../api/bookApi';
+import { borrowApi } from '../../api/borrowApi';
+import { borrowRequestApi } from '../../api/borrowRequestApi';
 import { reservationApi } from '../../api/reservationApi';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
@@ -7,6 +10,7 @@ import { useToast } from '../../contexts/ToastContext';
 export default function BookSearch() {
   const { isUser, user } = useAuth();
   const toast = useToast();
+  const navigate = useNavigate();
 
   const [books, setBooks] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, limit: 12, total: 0, totalPages: 1 });
@@ -26,8 +30,12 @@ export default function BookSearch() {
   const [selectedAvailability, setSelectedAvailability] = useState('');
   const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'table'
 
-  // Selected Book for Detail Modal
+  // Selected Book for Detail Modal & Borrow flow
   const [selectedBook, setSelectedBook] = useState(null);
+  const [bookEligibility, setBookEligibility] = useState(null);
+  const [loadingEligibility, setLoadingEligibility] = useState(false);
+  const [showBorrowConfirm, setShowBorrowConfirm] = useState(false);
+  const [borrowSubmitting, setBorrowSubmitting] = useState(false);
 
   // Fetch metadata once
   useEffect(() => {
@@ -72,6 +80,60 @@ export default function BookSearch() {
   useEffect(() => {
     fetchBooks(1);
   }, [fetchBooks]);
+
+  // Check eligibility whenever a book is selected for detail view
+  useEffect(() => {
+    if (selectedBook && isUser) {
+      let isMounted = true;
+      setLoadingEligibility(true);
+      setBookEligibility(null);
+      borrowApi.checkEligibility(selectedBook.id)
+        .then((res) => {
+          if (isMounted) {
+            setBookEligibility(res.eligibility);
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to check eligibility:', err);
+          if (isMounted) {
+            setBookEligibility({ can_borrow: false, reason: 'Không thể kiểm tra điều kiện mượn sách.' });
+          }
+        })
+        .finally(() => {
+          if (isMounted) setLoadingEligibility(false);
+        });
+
+      return () => {
+        isMounted = false;
+      };
+    } else {
+      setBookEligibility(null);
+      setShowBorrowConfirm(false);
+    }
+  }, [selectedBook, isUser]);
+
+  // Handle sending borrow request
+  const handleConfirmBorrow = async () => {
+    if (!selectedBook) return;
+    setBorrowSubmitting(true);
+    try {
+      const res = await borrowRequestApi.createBorrowRequest({ book_id: selectedBook.id });
+      toast.success(res.message || 'Yêu cầu mượn sách đã được gửi và đang chờ Admin xác nhận.');
+      setShowBorrowConfirm(false);
+
+      // Update eligibility to has_pending_request: true
+      setBookEligibility({
+        can_borrow: false,
+        has_pending_request: true,
+        reason: 'Bạn đã gửi yêu cầu mượn cuốn sách này và đang chờ Admin xác nhận.',
+        pending_request: res.request
+      });
+    } catch (err) {
+      toast.error(err.message || 'Lỗi khi gửi yêu cầu mượn sách.');
+    } finally {
+      setBorrowSubmitting(false);
+    }
+  };
 
   const handleReset = () => {
     setKeyword('');
@@ -423,27 +485,155 @@ export default function BookSearch() {
                 </div>
               )}
             </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setSelectedBook(null)}>
-                Đóng
-              </button>
-              {isUser && (
-                <button
-                  className="btn btn-primary"
-                  onClick={async () => {
-                    try {
-                      const res = await reservationApi.createReservation({ book_id: selectedBook.id });
-                      toast.success(res.message);
-                      setSelectedBook(null);
-                      fetchBooks(pagination.page);
-                    } catch (err) {
-                      toast.error(err.message || 'Lỗi khi đặt trước.');
-                    }
-                  }}
-                >
-                  🔖 Đặt trước sách này
+            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+              <div style={{ flex: '1 1 100%', marginBottom: (bookEligibility?.reason ? '4px' : '0') }}>
+                {isUser && bookEligibility && !bookEligibility.can_borrow && !bookEligibility.is_borrowing && !bookEligibility.is_out_of_stock && (
+                  <div style={{ padding: '8px 12px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: 'var(--radius-sm)', color: 'var(--color-danger, #ef4444)', fontSize: '12px' }}>
+                    ⚠ <strong>Không thể mượn:</strong> {bookEligibility.reason}
+                  </div>
+                )}
+                {isUser && bookEligibility?.is_borrowing && (
+                  <div style={{ padding: '8px 12px', background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: 'var(--radius-sm)', color: 'var(--color-primary, #2563eb)', fontSize: '12px' }}>
+                    📖 <strong>Đang mượn:</strong> {bookEligibility.reason}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', width: '100%', alignItems: 'center' }}>
+                <button className="btn btn-secondary" onClick={() => setSelectedBook(null)}>
+                  Đóng
                 </button>
-              )}
+                {isUser && (
+                  loadingEligibility ? (
+                    <button className="btn btn-primary" disabled>
+                      <span className="spinner spinner-sm" style={{ marginRight: '6px' }}></span>
+                      Đang kiểm tra...
+                    </button>
+                  ) : bookEligibility?.is_borrowing ? (
+                    <button
+                      className="btn btn-outline"
+                      style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
+                      onClick={() => {
+                        setSelectedBook(null);
+                        navigate('/user/borrowed');
+                      }}
+                      title="Xem trong danh sách sách đang mượn"
+                    >
+                      📖 Đang mượn (Đi tới tủ sách) →
+                    </button>
+                  ) : bookEligibility?.has_pending_request ? (
+                    <button
+                      className="btn btn-secondary"
+                      disabled
+                      style={{ background: '#fef3c7', color: '#b45309', borderColor: '#fde68a', fontWeight: 600, cursor: 'not-allowed' }}
+                      title={bookEligibility.reason}
+                    >
+                      🟡 Đang chờ Admin xác nhận
+                    </button>
+                  ) : selectedBook.available_quantity <= 0 ? (
+                    <button
+                      className="btn btn-primary"
+                      style={{ background: '#d97706', borderColor: '#d97706' }}
+                      onClick={async () => {
+                        try {
+                          const res = await reservationApi.createReservation({ book_id: selectedBook.id });
+                          toast.success(res.message);
+                          setSelectedBook(null);
+                          fetchBooks(pagination.page);
+                        } catch (err) {
+                          toast.error(err.message || 'Lỗi khi đặt trước.');
+                        }
+                      }}
+                    >
+                      🔖 Đặt trước sách này
+                    </button>
+                  ) : !bookEligibility?.can_borrow ? (
+                    <button
+                      className="btn btn-secondary"
+                      disabled
+                      style={{ opacity: 0.65, cursor: 'not-allowed' }}
+                      title={bookEligibility?.reason || 'Không đủ điều kiện mượn'}
+                    >
+                      🚫 Không thể mượn
+                    </button>
+                  ) : (
+                    <button
+                      className="btn btn-primary"
+                      onClick={() => setShowBorrowConfirm(true)}
+                    >
+                      📚 Mượn sách
+                    </button>
+                  )
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal for Borrow Request */}
+      {showBorrowConfirm && selectedBook && (
+        <div className="modal-overlay" style={{ zIndex: 1100 }}>
+          <div className="modal" style={{ maxWidth: '480px' }}>
+            <div className="modal-header">
+              <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span>📚</span> Xác nhận mượn sách?
+              </h3>
+              <button className="modal-close" onClick={() => setShowBorrowConfirm(false)}>×</button>
+            </div>
+            <div className="modal-body">
+              <p style={{ margin: '0 0 12px', fontSize: 'var(--font-size-base)', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                Bạn muốn gửi yêu cầu mượn sách này?
+              </p>
+              <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 'var(--radius-md)', padding: '12px', marginBottom: '16px', color: '#1e40af', fontSize: '13px' }}>
+                ℹ <strong>Lưu ý:</strong> Yêu cầu sẽ được Admin xác nhận trước khi sách được ghi nhận là đang mượn.
+              </div>
+
+              <div style={{ background: 'var(--color-bg-warm)', padding: '16px', borderRadius: 'var(--radius-md)', display: 'flex', flexDirection: 'column', gap: '10px', fontSize: 'var(--font-size-sm)' }}>
+                <div>
+                  <span style={{ color: 'var(--color-text-secondary)' }}>Tên sách: </span>
+                  <strong style={{ color: 'var(--color-text-primary)' }}>{selectedBook.title}</strong>
+                </div>
+                <div>
+                  <span style={{ color: 'var(--color-text-secondary)' }}>Mã sách: </span>
+                  <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{selectedBook.book_code}</span>
+                </div>
+                <div>
+                  <span style={{ color: 'var(--color-text-secondary)' }}>Tác giả: </span>
+                  <strong>{selectedBook.author_name || 'Nhiều tác giả'}</strong>
+                </div>
+                <div style={{ borderTop: '1px dashed var(--color-border)', paddingTop: '8px', display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'var(--color-text-secondary)' }}>Thời gian gửi yêu cầu: </span>
+                  <strong>Hiện tại (Server)</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'var(--color-text-secondary)' }}>Thời hạn mượn dự kiến: </span>
+                  <strong style={{ color: 'var(--color-primary)' }}>14 ngày (sau khi duyệt)</strong>
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button 
+                className="btn btn-secondary" 
+                onClick={() => setShowBorrowConfirm(false)}
+                disabled={borrowSubmitting}
+              >
+                Hủy
+              </button>
+              <button 
+                className="btn btn-primary" 
+                onClick={handleConfirmBorrow}
+                disabled={borrowSubmitting}
+              >
+                {borrowSubmitting ? (
+                  <>
+                    <span className="spinner spinner-sm" style={{ marginRight: '6px' }}></span>
+                    Đang gửi yêu cầu...
+                  </>
+                ) : (
+                  '✓ Gửi yêu cầu mượn'
+                )}
+              </button>
             </div>
           </div>
         </div>

@@ -11,6 +11,7 @@ import ReaderManagement from './pages/admin/ReaderManagement';
 import AccountManagement from './pages/admin/AccountManagement';
 import BorrowDesk from './pages/admin/BorrowDesk';
 import BorrowRecords from './pages/admin/BorrowRecords';
+import BorrowRequests from './pages/admin/BorrowRequests';
 import ReservationManagement from './pages/admin/ReservationManagement';
 import FineManagement from './pages/admin/FineManagement';
 import ImportManagement from './pages/admin/ImportManagement';
@@ -79,6 +80,7 @@ function AppRoutes() {
         <Route path="accounts" element={<AccountManagement />} />
         <Route path="borrow" element={<BorrowDesk />} />
         <Route path="borrow-records" element={<BorrowRecords />} />
+        <Route path="borrow-requests" element={<BorrowRequests />} />
         <Route path="reservations" element={<ReservationManagement />} />
         <Route path="fines" element={<FineManagement />} />
         <Route path="imports" element={<ImportManagement />} />

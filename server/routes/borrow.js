@@ -15,6 +15,24 @@ router.get('/stats', authMiddleware, authorize('admin'), (req, res) => {
   }
 });
 
+// GET /api/borrow/active-by-book - Find active borrow record by scanned book code or ISBN
+router.get('/active-by-book', authMiddleware, authorize('admin'), (req, res) => {
+  try {
+    const { code } = req.query;
+    if (!code || !code.trim()) {
+      return res.status(400).json({ error: 'Vui lòng cung cấp mã sách hoặc ISBN.' });
+    }
+    const record = Borrow.findActiveByBook(code.trim());
+    if (!record) {
+      return res.status(404).json({ error: `Không tìm thấy phiếu mượn đang hoạt động nào cho ấn phẩm "${code}".` });
+    }
+    res.json({ record });
+  } catch (err) {
+    console.error('Error finding active borrow by book:', err);
+    res.status(500).json({ error: 'Lỗi khi tra cứu phiếu mượn theo mã sách.' });
+  }
+});
+
 // GET /api/borrow/my-active - Logged-in user's active borrows
 router.get('/my-active', authMiddleware, (req, res) => {
   try {
@@ -99,22 +117,48 @@ router.get('/:id', authMiddleware, (req, res) => {
   }
 });
 
-// POST /api/borrow - Create borrow record (Admin only)
-router.post('/', authMiddleware, authorize('admin'), (req, res) => {
+// GET /api/borrow/eligibility/:bookId - Check if current user is eligible to borrow a book
+router.get('/eligibility/:bookId', authMiddleware, (req, res) => {
+  try {
+    const bookId = parseInt(req.params.bookId, 10);
+    if (!bookId || isNaN(bookId)) {
+      return res.status(400).json({ error: 'Mã sách không hợp lệ.' });
+    }
+    const eligibility = Borrow.checkEligibility(req.user.id, bookId);
+    res.json({ eligibility });
+  } catch (err) {
+    console.error('Error checking borrow eligibility:', err);
+    res.status(500).json({ error: 'Lỗi khi kiểm tra điều kiện mượn sách.' });
+  }
+});
+
+// POST /api/borrow - Create borrow record (User or Admin)
+router.post('/', authMiddleware, (req, res) => {
   try {
     const { user_id, book_ids, notes, custom_due_date } = req.body;
+    const isAdmin = req.user.role === 'admin';
+
+    // If regular user, enforce self-borrowing and standard due date
+    const targetUserId = isAdmin ? Number(user_id) : req.user.id;
+    const adminId = isAdmin ? req.user.id : null;
+    const borrowNotes = isAdmin ? notes : (notes || 'Độc giả tự tạo phiếu mượn qua hệ thống');
+    const dueDate = isAdmin ? custom_due_date : null;
+
+    if (!targetUserId) {
+      return res.status(400).json({ error: 'Vui lòng cung cấp mã độc giả.' });
+    }
 
     const result = Borrow.borrowBooks({
-      user_id: Number(user_id),
-      admin_id: req.user.id,
+      user_id: targetUserId,
+      admin_id: adminId,
       book_ids: Array.isArray(book_ids) ? book_ids.map(Number) : [],
-      notes,
-      custom_due_date
+      notes: borrowNotes,
+      custom_due_date: dueDate
     });
 
     const fullRecord = Borrow.findById(result.id);
     res.status(201).json({
-      message: `Tạo phiếu mượn ${result.borrow_code} thành công.`,
+      message: `Mượn sách thành công! Mã phiếu: ${result.borrow_code}.`,
       record: fullRecord
     });
   } catch (err) {

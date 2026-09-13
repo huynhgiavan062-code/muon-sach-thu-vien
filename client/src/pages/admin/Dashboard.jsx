@@ -85,6 +85,41 @@ export default function AdminDashboard() {
         </div>
       </div>
 
+      {/* Pending Borrow Requests Banner */}
+      {metrics.pending_borrow_requests > 0 && (
+        <div style={{
+          background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(217, 119, 6, 0.05))',
+          border: '1px solid rgba(245, 158, 11, 0.35)',
+          borderRadius: '12px',
+          padding: '16px 20px',
+          marginBottom: '24px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '12px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ fontSize: '24px' }}>📬</span>
+            <div>
+              <div style={{ fontWeight: '700', color: '#b45309', fontSize: '15px' }}>
+                Yêu cầu mượn cần xử lý: {metrics.pending_borrow_requests}
+              </div>
+              <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                Có độc giả đang gửi yêu cầu mượn sách mới chờ xác nhận từ ban quản lý thư viện.
+              </div>
+            </div>
+          </div>
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={() => navigate('/admin/borrow-requests')}
+            style={{ background: '#d97706', borderColor: '#d97706', fontWeight: '600' }}
+          >
+            Duyệt yêu cầu ngay ({metrics.pending_borrow_requests}) →
+          </button>
+        </div>
+      )}
+
       {/* Primary KPI Grid */}
       <div className="stat-grid" style={{ marginBottom: '24px' }}>
         <div className="stat-card" onClick={() => navigate('/admin/books')} style={{ cursor: 'pointer' }}>
@@ -138,6 +173,26 @@ export default function AdminDashboard() {
 
       {/* Secondary Quick Metrics */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+        <div style={{
+          background: 'var(--bg-secondary)',
+          padding: '14px 18px',
+          borderRadius: '10px',
+          border: metrics.pending_borrow_requests > 0 ? '1px solid rgba(245, 158, 11, 0.5)' : '1px solid var(--border-color)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
+          <div>
+            <span style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'block' }}>Yêu cầu mượn cần xử lý</span>
+            <strong style={{ fontSize: '16px', color: metrics.pending_borrow_requests > 0 ? '#d97706' : 'var(--text-primary)' }}>
+              {metrics.pending_borrow_requests || 0} yêu cầu chờ duyệt
+            </strong>
+          </div>
+          <button className="btn btn-outline btn-sm" onClick={() => navigate('/admin/borrow-requests')} style={{ fontSize: '11px', padding: '4px 8px' }}>
+            Xử lý
+          </button>
+        </div>
+
         <div style={{ background: 'var(--bg-secondary)', padding: '14px 18px', borderRadius: '10px', border: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <span style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'block' }}>Nợ phạt chưa thu</span>

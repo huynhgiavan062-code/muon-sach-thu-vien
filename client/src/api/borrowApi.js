@@ -20,6 +20,14 @@ export const borrowApi = {
     return api.get(`/borrow/${id}`);
   },
 
+  getActiveBorrowByBook(code) {
+    return api.get(`/borrow/active-by-book?code=${encodeURIComponent(code)}`);
+  },
+
+  checkEligibility(bookId) {
+    return api.get(`/borrow/eligibility/${bookId}`);
+  },
+
   createBorrow(borrowData) {
     return api.post('/borrow', borrowData);
   },

@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
+import CommandPalette from '../common/CommandPalette';
 import './Layout.css';
 
 const pageTitles = {
@@ -31,9 +32,22 @@ const pageTitles = {
 
 export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const { isAdmin } = useAuth();
   const location = useLocation();
 
   const title = pageTitles[location.pathname] || '';
+
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setPaletteOpen(prev => !prev);
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   return (
     <div className="app-layout">
@@ -42,11 +56,17 @@ export default function Layout() {
         <Topbar
           title={title}
           onMenuToggle={() => setSidebarOpen(!sidebarOpen)}
+          onOpenPalette={() => setPaletteOpen(true)}
         />
         <main className="app-content">
           <Outlet />
         </main>
       </div>
+
+      {/* Global Admin Command Palette */}
+      {isAdmin && (
+        <CommandPalette isOpen={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      )}
 
       {/* Mobile overlay */}
       {sidebarOpen && (

@@ -101,6 +101,41 @@ export default function UserDashboard() {
         </div>
       </div>
 
+      {/* Pending Borrow Requests Banner */}
+      {metrics.pending_requests_count > 0 && (
+        <div style={{
+          background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(217, 119, 6, 0.05))',
+          border: '1px solid rgba(245, 158, 11, 0.35)',
+          borderRadius: '12px',
+          padding: '16px 20px',
+          marginBottom: '24px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '12px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ fontSize: '24px' }}>📬</span>
+            <div>
+              <div style={{ fontWeight: '700', color: '#b45309', fontSize: '15px' }}>
+                Bạn có {metrics.pending_requests_count} yêu cầu mượn sách đang chờ Admin xác nhận
+              </div>
+              <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                Yêu cầu sẽ được xử lý trước khi sách được ghi nhận là đang mượn chính thức.
+              </div>
+            </div>
+          </div>
+          <button
+            className="btn btn-outline btn-sm"
+            onClick={() => navigate('/user/borrowed')}
+            style={{ borderColor: '#d97706', color: '#b45309', fontWeight: '600' }}
+          >
+            Xem chi tiết yêu cầu →
+          </button>
+        </div>
+      )}
+
       {/* User Stats Grid */}
       <div className="stat-grid" style={{ marginBottom: '24px' }}>
         <div className="stat-card" onClick={() => navigate('/user/borrowed')} style={{ cursor: 'pointer' }}>

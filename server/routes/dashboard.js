@@ -36,6 +36,10 @@ router.get('/admin', authMiddleware, authorize('admin'), (req, res) => {
       FROM reservations
     `) || { pending_reservations: 0, ready_reservations: 0 };
 
+    const borrowRequestsRow = dbGet(`
+      SELECT COUNT(*) as count FROM borrow_requests WHERE status = 'pending'
+    `) || { count: 0 };
+
     // 2. Recent Borrows (latest 5)
     const recentBorrows = dbAll(`
       SELECT 
@@ -93,7 +97,8 @@ router.get('/admin', authMiddleware, authorize('admin'), (req, res) => {
         unpaid_fines_amount: finesRow.debt_fines,
         unpaid_fines_count: finesRow.unpaid_count,
         pending_reservations: reservationsRow.pending_reservations,
-        ready_reservations: reservationsRow.ready_reservations
+        ready_reservations: reservationsRow.ready_reservations,
+        pending_borrow_requests: borrowRequestsRow.count
       },
       recentBorrows,
       topBooks,
@@ -167,15 +172,28 @@ router.get('/user', authMiddleware, (req, res) => {
       LIMIT 4
     `);
 
+    // Pending borrow requests
+    const pendingBorrowRequests = dbAll(`
+      SELECT 
+        br.id, br.request_code, br.requested_at, br.status,
+        b.title as book_title, b.book_code
+      FROM borrow_requests br
+      JOIN books b ON br.book_id = b.id
+      WHERE br.user_id = ? AND br.status = 'pending'
+      ORDER BY br.requested_at DESC
+    `, [userId]);
+
     res.json({
       metrics: {
         active_borrows_count: activeBorrows.length,
         reservations_count: myReservations.length,
+        pending_requests_count: pendingBorrowRequests.length,
         unpaid_fines: finesRow.unpaid_fines,
         unpaid_fines_count: finesRow.unpaid_count
       },
       activeBorrows,
       reservations: myReservations,
+      pendingRequests: pendingBorrowRequests,
       notifications,
       newArrivals
     });

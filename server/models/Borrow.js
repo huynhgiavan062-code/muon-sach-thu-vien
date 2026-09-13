@@ -1,5 +1,24 @@
 const { dbAll, dbGet, dbRun, dbTransaction } = require('../config/database');
 
+function getVietnamNow(date = new Date()) {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  });
+  const parts = Object.fromEntries(formatter.formatToParts(date).map(p => [p.type, p.value]));
+  const dateStr = `${parts.year}-${parts.month}-${parts.day}`;
+  const timeStr = `${parts.hour}:${parts.minute}:${parts.second}`;
+  const dateTimeStr = `${dateStr} ${timeStr}`;
+  const isoStr = `${dateStr}T${timeStr}+07:00`;
+  return { dateStr, timeStr, dateTimeStr, isoStr, timestamp: date.getTime() };
+}
+
 const Borrow = {
   getSetting(key, defaultValue = '') {
     const row = dbGet('SELECT value FROM system_settings WHERE key = ?', [key]);
@@ -7,8 +26,8 @@ const Borrow = {
   },
 
   generateBorrowCode() {
-    const today = new Date();
-    const year = today.getFullYear();
+    const vnNow = getVietnamNow();
+    const year = vnNow.dateStr.split('-')[0];
     const prefix = `PM-${year}-`;
     const last = dbGet("SELECT borrow_code FROM borrow_records WHERE borrow_code LIKE ? ORDER BY id DESC LIMIT 1", [`${prefix}%`]);
 
@@ -25,12 +44,12 @@ const Borrow = {
 
   // Update status of overdue records
   refreshOverdueStatuses() {
-    const today = new Date().toISOString().split('T')[0];
+    const vnNow = getVietnamNow();
     dbRun(`
       UPDATE borrow_records 
       SET status = 'overdue', updated_at = CURRENT_TIMESTAMP 
       WHERE status = 'borrowing' AND due_date < ?
-    `, [today]);
+    `, [vnNow.dateTimeStr]);
   },
 
   findAll({
@@ -97,7 +116,8 @@ const Borrow = {
     const sql = `
       SELECT 
         br.id, br.borrow_code, br.user_id, br.admin_id,
-        br.borrow_date, br.due_date, br.return_date, br.status,
+        br.borrow_date, br.due_date, br.return_date,
+        br.borrowed_at, br.returned_at, br.status,
         br.renewal_count, br.notes, br.created_at,
         u.full_name as user_full_name, u.reader_code as user_reader_code,
         u.email as user_email, u.phone as user_phone,
@@ -179,6 +199,146 @@ const Borrow = {
     return record;
   },
 
+  findActiveByBook(codeOrIsbn) {
+    if (!codeOrIsbn || !codeOrIsbn.trim()) return null;
+    this.refreshOverdueStatuses();
+    const cleanCode = codeOrIsbn.trim();
+    const match = dbGet(`
+      SELECT bd.borrow_record_id
+      FROM borrow_details bd
+      JOIN borrow_records br ON bd.borrow_record_id = br.id
+      JOIN books b ON bd.book_id = b.id
+      WHERE (b.book_code = ? OR b.isbn = ?)
+        AND br.status IN ('borrowing', 'overdue')
+      ORDER BY br.id DESC
+      LIMIT 1
+    `, [cleanCode, cleanCode]);
+
+    if (!match) return null;
+    return this.findById(match.borrow_record_id);
+  },
+
+  checkEligibility(user_id, book_id) {
+    this.refreshOverdueStatuses();
+    const durationDays = parseInt(this.getSetting('borrow_duration_days', '14'), 10);
+    const vnNow = getVietnamNow();
+    const dueDateObj = new Date(vnNow.timestamp);
+    dueDateObj.setDate(dueDateObj.getDate() + durationDays);
+    const vnDue = getVietnamNow(dueDateObj);
+    const estimatedDueDate = `${vnDue.dateStr} 23:59:59`;
+
+    const book = dbGet('SELECT id, book_code, title, available_quantity FROM books WHERE id = ?', [book_id]);
+    if (!book) {
+      return { can_borrow: false, reason: 'Không tìm thấy thông tin sách.' };
+    }
+
+    const user = dbGet('SELECT id, full_name, status FROM users WHERE id = ?', [user_id]);
+    if (!user) {
+      return { can_borrow: false, reason: 'Không tìm thấy thông tin độc giả.' };
+    }
+
+    if (user.status === 'locked') {
+      return { can_borrow: false, reason: 'Tài khoản của bạn đang bị khóa.' };
+    }
+    if (user.status === 'suspended') {
+      return { can_borrow: false, reason: 'Tài khoản của bạn đang bị tạm ngưng.' };
+    }
+
+    // Check if user is currently borrowing this book
+    const activeBorrow = dbGet(`
+      SELECT br.id, br.borrow_code, br.due_date, br.status
+      FROM borrow_records br
+      JOIN borrow_details bd ON br.id = bd.borrow_record_id
+      WHERE br.user_id = ? AND bd.book_id = ? AND br.status IN ('borrowing', 'overdue')
+      ORDER BY br.id DESC
+      LIMIT 1
+    `, [user_id, book_id]);
+
+    if (activeBorrow) {
+      return {
+        can_borrow: false,
+        is_borrowing: true,
+        reason: `Bạn đang mượn cuốn sách này (Mã phiếu: ${activeBorrow.borrow_code}, Hạn trả: ${activeBorrow.due_date}).`,
+        active_borrow: activeBorrow,
+        borrow_duration_days: durationDays,
+        estimated_due_date: estimatedDueDate
+      };
+    }
+
+    // Check if user already has a pending borrow request for this book
+    const pendingRequest = dbGet(`
+      SELECT id, request_code, requested_at
+      FROM borrow_requests
+      WHERE user_id = ? AND book_id = ? AND status = 'pending'
+      LIMIT 1
+    `, [user_id, book_id]);
+
+    if (pendingRequest) {
+      return {
+        can_borrow: false,
+        has_pending_request: true,
+        reason: `Bạn đã gửi yêu cầu mượn cuốn sách này (Mã: ${pendingRequest.request_code}) và đang chờ Admin duyệt.`,
+        pending_request: pendingRequest,
+        borrow_duration_days: durationDays,
+        estimated_due_date: estimatedDueDate
+      };
+    }
+
+    // Check if book is out of stock
+    if (book.available_quantity <= 0) {
+      return {
+        can_borrow: false,
+        is_out_of_stock: true,
+        reason: 'Sách hiện đã hết số lượng khả dụng trong kho. Bạn có thể Đặt trước.',
+        borrow_duration_days: durationDays,
+        estimated_due_date: estimatedDueDate
+      };
+    }
+
+    // Check max borrow limit
+    const maxBorrow = parseInt(this.getSetting('max_borrow_books', '5'), 10);
+    const activeCountRow = dbGet(`
+      SELECT COUNT(*) as count 
+      FROM borrow_records br
+      JOIN borrow_details bd ON br.id = bd.borrow_record_id
+      WHERE br.user_id = ? AND br.status IN ('borrowing', 'overdue')
+    `, [user_id]);
+    const currentActiveCount = activeCountRow ? activeCountRow.count : 0;
+
+    if (currentActiveCount >= maxBorrow) {
+      return {
+        can_borrow: false,
+        reason: `Bạn đã đạt giới hạn mượn sách (${currentActiveCount}/${maxBorrow} cuốn). Vui lòng trả sách trước khi mượn tiếp.`,
+        borrow_duration_days: durationDays,
+        estimated_due_date: estimatedDueDate
+      };
+    }
+
+    // Check unpaid fines
+    const unpaidFinesRow = dbGet(`
+      SELECT COUNT(*) as count, SUM(amount - paid_amount) as total
+      FROM fines
+      WHERE user_id = ? AND status = 'unpaid'
+    `, [user_id]);
+    if (unpaidFinesRow && unpaidFinesRow.count > 0 && unpaidFinesRow.total > 50000) {
+      return {
+        can_borrow: false,
+        reason: `Bạn đang có tiền phạt chưa thanh toán (${unpaidFinesRow.total.toLocaleString('vi-VN')} đ). Vui lòng nộp phạt trước khi mượn sách.`,
+        borrow_duration_days: durationDays,
+        estimated_due_date: estimatedDueDate
+      };
+    }
+
+    return {
+      can_borrow: true,
+      is_borrowing: false,
+      is_out_of_stock: false,
+      reason: '',
+      borrow_duration_days: durationDays,
+      estimated_due_date: estimatedDueDate
+    };
+  },
+
   // ==================== BORROW TRANSACTION ====================
   borrowBooks({ user_id, admin_id, book_ids, notes, custom_due_date }) {
     if (!user_id) throw new Error('Vui lòng chọn độc giả mượn sách.');
@@ -224,12 +384,23 @@ const Borrow = {
         throw new Error(`Độc giả đang có khoản tiền phạt chưa thanh toán (${unpaidFinesRow.total.toLocaleString('vi-VN')} đ). Vui lòng nộp phạt trước khi tiếp tục mượn sách.`);
       }
 
-      // 4. Check each book availability
+      // 4. Check each book availability & ensure user is not already borrowing it
       for (const bId of book_ids) {
         const book = tx.dbGet('SELECT * FROM books WHERE id = ?', [bId]);
         if (!book) throw new Error(`Không tìm thấy cuốn sách có ID ${bId}.`);
         if (book.available_quantity <= 0) {
           throw new Error(`Sách "${book.title}" (${book.book_code}) đã hết số lượng khả dụng trong kho.`);
+        }
+
+        const alreadyBorrowing = tx.dbGet(`
+          SELECT b.title 
+          FROM borrow_records br
+          JOIN borrow_details bd ON br.id = bd.borrow_record_id
+          JOIN books b ON bd.book_id = b.id
+          WHERE br.user_id = ? AND bd.book_id = ? AND br.status IN ('borrowing', 'overdue')
+        `, [user_id, bId]);
+        if (alreadyBorrowing) {
+          throw new Error(`Bạn đang mượn cuốn sách "${alreadyBorrowing.title}". Không thể mượn thêm cuốn cùng loại.`);
         }
       }
 
@@ -487,6 +658,54 @@ const Borrow = {
       new_due_date: newDueDateStr,
       renewal_count: newCount,
       max_renewals: maxRenewals
+    };
+  },
+
+  findActiveByBook(codeOrIsbn) {
+    this.refreshOverdueStatuses();
+    const queryStr = codeOrIsbn.trim();
+
+    const sql = `
+      SELECT 
+        br.id as borrow_record_id,
+        br.borrow_code,
+        br.user_id,
+        br.borrow_date,
+        br.due_date,
+        br.status,
+        u.full_name as user_full_name,
+        u.reader_code as user_reader_code,
+        u.phone as user_phone,
+        b.id as book_id,
+        b.book_code,
+        b.title as book_title,
+        b.isbn,
+        b.cover_image,
+        bd.id as detail_id
+      FROM borrow_details bd
+      JOIN books b ON bd.book_id = b.id
+      JOIN borrow_records br ON bd.borrow_record_id = br.id
+      JOIN users u ON br.user_id = u.id
+      WHERE (b.book_code = ? OR b.isbn = ?)
+        AND br.status IN ('borrowing', 'overdue')
+      ORDER BY br.id DESC
+      LIMIT 1
+    `;
+
+    const match = dbGet(sql, [queryStr, queryStr]);
+    if (!match) return null;
+
+    const today = new Date();
+    const dueDate = new Date(match.due_date);
+    const timeDiff = today.getTime() - dueDate.getTime();
+    const overdueDays = timeDiff > 0 ? Math.ceil(timeDiff / (1000 * 3600 * 24)) : 0;
+    const finePerDay = parseInt(this.getSetting('fine_per_day', '5000'), 10);
+    const estimatedFine = overdueDays > 0 ? overdueDays * finePerDay : 0;
+
+    return {
+      ...match,
+      overdue_days: overdueDays,
+      estimated_fine: estimatedFine
     };
   },
 

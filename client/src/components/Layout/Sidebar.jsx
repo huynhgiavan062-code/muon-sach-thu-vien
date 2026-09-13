@@ -14,6 +14,7 @@ const adminMenu = [
     items: [
       { path: '/admin/books', label: 'Sách', icon: '📖' },
       { path: '/admin/readers', label: 'Độc giả', icon: '👤' },
+      { path: '/admin/borrow-requests', label: 'Yêu cầu mượn', icon: '📬' },
       { path: '/admin/borrow', label: 'Mượn / Trả', icon: '↔' },
       { path: '/admin/borrow-records', label: 'Phiếu mượn', icon: '📋' },
       { path: '/admin/reservations', label: 'Đặt trước', icon: '🔖' },

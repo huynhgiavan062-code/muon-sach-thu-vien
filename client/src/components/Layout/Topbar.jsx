@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { notificationApi } from '../../api/notificationApi';
 import './Topbar.css';
 
-export default function Topbar({ title, onMenuToggle }) {
+export default function Topbar({ title, onMenuToggle, onOpenPalette }) {
   const { user, logout, isAdmin } = useAuth();
   const navigate = useNavigate();
 
@@ -102,6 +102,34 @@ export default function Topbar({ title, onMenuToggle }) {
       </div>
 
       <div className="topbar-right">
+        {/* Admin Quick Command Palette Button */}
+        {isAdmin && (
+          <button
+            className="topbar-palette-btn"
+            onClick={onOpenPalette}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '5px 12px',
+              background: 'var(--bg-secondary, #f1f5f9)',
+              border: '1px solid var(--border-color, #e2e8f0)',
+              borderRadius: '20px',
+              fontSize: '12px',
+              color: 'var(--text-secondary, #64748b)',
+              cursor: 'pointer',
+              marginRight: '6px'
+            }}
+            title="Mở tìm kiếm nhanh (Ctrl + K)"
+          >
+            <span>🔍</span>
+            <span style={{ fontWeight: 500 }}>Lệnh nhanh...</span>
+            <kbd style={{ fontSize: '10px', background: '#fff', border: '1px solid #cbd5e1', padding: '1px 5px', borderRadius: '4px', color: '#64748b' }}>
+              Ctrl K
+            </kbd>
+          </button>
+        )}
+
         {/* Notification bell & dropdown */}
         <div className="topbar-notif-wrapper" ref={notifRef}>
           <button

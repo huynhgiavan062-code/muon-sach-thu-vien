@@ -204,6 +204,8 @@ async function initializeDatabase() {
       borrow_date DATE NOT NULL,
       due_date DATE NOT NULL,
       return_date DATE,
+      borrowed_at DATETIME,
+      returned_at DATETIME,
       status TEXT NOT NULL DEFAULT 'borrowing' CHECK(status IN ('borrowing', 'returned', 'overdue')),
       renewal_count INTEGER DEFAULT 0,
       notes TEXT,
@@ -225,6 +227,26 @@ async function initializeDatabase() {
       condition_note TEXT,
       FOREIGN KEY (borrow_record_id) REFERENCES borrow_records(id),
       FOREIGN KEY (book_id) REFERENCES books(id)
+    )
+  `);
+
+  // ==================== BORROW REQUESTS ====================
+  db.run(`
+    CREATE TABLE IF NOT EXISTS borrow_requests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      request_code TEXT UNIQUE NOT NULL,
+      user_id INTEGER NOT NULL,
+      book_id INTEGER NOT NULL,
+      requested_at DATETIME NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'approved', 'rejected', 'cancelled')),
+      processed_at DATETIME,
+      processed_by INTEGER,
+      rejection_reason TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      FOREIGN KEY (book_id) REFERENCES books(id),
+      FOREIGN KEY (processed_by) REFERENCES users(id)
     )
   `);
 
@@ -301,6 +323,24 @@ async function initializeDatabase() {
     }
   } catch (migErr) {
     console.warn('Migration warning for fines table:', migErr);
+  }
+
+  // Migration: Add borrowed_at, returned_at to borrow_records if not exist
+  try {
+    const brTableInfo = dbAll("PRAGMA table_info(borrow_records)");
+    const hasBorrowedAt = brTableInfo.some(c => c.name === 'borrowed_at');
+    const hasReturnedAt = brTableInfo.some(c => c.name === 'returned_at');
+
+    if (!hasBorrowedAt) {
+      db.run('ALTER TABLE borrow_records ADD COLUMN borrowed_at DATETIME');
+      db.run("UPDATE borrow_records SET borrowed_at = COALESCE(created_at, borrow_date || ' 08:00:00') WHERE borrowed_at IS NULL");
+    }
+    if (!hasReturnedAt) {
+      db.run('ALTER TABLE borrow_records ADD COLUMN returned_at DATETIME');
+      db.run("UPDATE borrow_records SET returned_at = (return_date || ' 17:00:00') WHERE returned_at IS NULL AND return_date IS NOT NULL");
+    }
+  } catch (migErr) {
+    console.warn('Migration warning for borrow_records table:', migErr);
   }
 
   // ==================== IMPORT RECEIPTS ====================
