@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { dashboardApi } from '../../api/dashboardApi';
+import BookCover from '../../components/common/BookCover';
 
 export default function UserDashboard() {
   const { user } = useAuth();
@@ -271,15 +272,23 @@ export default function UserDashboard() {
                       border: '1px solid var(--border-color)'
                     }}
                   >
-                    <div>
-                      <span style={{ fontSize: '11px', color: 'var(--color-primary)', fontWeight: 600, textTransform: 'uppercase' }}>
-                        {bk.category_name}
-                      </span>
-                      <h4 style={{ margin: '4px 0 6px', fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', lineHeight: '1.3' }}>
-                        {bk.title}
-                      </h4>
-                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                        {bk.author_name || 'Nhiều tác giả'}
+                    <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                      <BookCover
+                        src={bk.cover_image}
+                        title={bk.title}
+                        category={bk.category_name}
+                        size="sm"
+                      />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ fontSize: '11px', color: 'var(--color-primary)', fontWeight: 600, textTransform: 'uppercase' }}>
+                          {bk.category_name}
+                        </span>
+                        <h4 style={{ margin: '4px 0 6px', fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', lineHeight: '1.3' }}>
+                          {bk.title}
+                        </h4>
+                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                          {bk.author_name || 'Nhiều tác giả'}
+                        </div>
                       </div>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px', paddingTop: '8px', borderTop: '1px solid var(--border-color)' }}>

@@ -44,10 +44,16 @@ class ApiClient {
         throw new Error('Phiên đăng nhập đã hết hạn');
       }
 
-      const data = await response.json();
+      let data;
+      const text = await response.text();
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch (e) {
+        data = { error: response.statusText || 'Lỗi phản hồi từ máy chủ backend (Port 3001).' };
+      }
 
       if (!response.ok) {
-        throw new Error(data.error || 'Đã xảy ra lỗi');
+        throw new Error(data.error || `Lỗi máy chủ (${response.status})`);
       }
 
       return data;
@@ -66,14 +72,21 @@ class ApiClient {
   post(endpoint, data) {
     return this.request(endpoint, {
       method: 'POST',
-      body: JSON.stringify(data)
+      body: data instanceof FormData ? data : JSON.stringify(data)
+    });
+  }
+
+  upload(endpoint, formData) {
+    return this.request(endpoint, {
+      method: 'POST',
+      body: formData
     });
   }
 
   put(endpoint, data) {
     return this.request(endpoint, {
       method: 'PUT',
-      body: JSON.stringify(data)
+      body: data instanceof FormData ? data : JSON.stringify(data)
     });
   }
 

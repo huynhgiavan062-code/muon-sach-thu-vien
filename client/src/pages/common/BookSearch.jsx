@@ -6,6 +6,7 @@ import { borrowRequestApi } from '../../api/borrowRequestApi';
 import { reservationApi } from '../../api/reservationApi';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
+import BookCover from '../../components/common/BookCover';
 
 export default function BookSearch() {
   const { isUser, user } = useAuth();
@@ -314,7 +315,14 @@ export default function BookSearch() {
                     )}
                   </div>
 
-                  <div style={{ fontSize: '32px', textAlign: 'center', margin: '10px 0' }}>📖</div>
+                  <div style={{ display: 'flex', justifyContent: 'center', margin: '12px 0 16px' }}>
+                    <BookCover
+                      src={book.cover_image}
+                      title={book.title}
+                      category={book.category_name}
+                      size="lg"
+                    />
+                  </div>
 
                   <h3 style={{ fontSize: '15px', fontWeight: '600', marginBottom: '6px', color: 'var(--color-text)', minHeight: '40px' }}>
                     {book.title}
@@ -373,8 +381,18 @@ export default function BookSearch() {
                       </strong>
                     </td>
                     <td>
-                      <strong>{book.title}</strong>
-                      {book.isbn && <span style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', display: 'block' }}>ISBN: {book.isbn}</span>}
+                      <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                        <BookCover
+                          src={book.cover_image}
+                          title={book.title}
+                          category={book.category_name}
+                          size="sm"
+                        />
+                        <div>
+                          <strong>{book.title}</strong>
+                          {book.isbn && <span style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', display: 'block' }}>ISBN: {book.isbn}</span>}
+                        </div>
+                      </div>
                     </td>
                     <td>{book.author_name || '—'}</td>
                     <td><span className="badge badge-neutral">{book.category_name || '—'}</span></td>
@@ -446,9 +464,12 @@ export default function BookSearch() {
             </div>
             <div className="modal-body">
               <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start', marginBottom: '20px' }}>
-                <div style={{ width: '80px', height: '110px', background: 'var(--color-primary-bg)', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '36px', color: 'var(--color-primary)' }}>
-                  📖
-                </div>
+                <BookCover
+                  src={selectedBook.cover_image}
+                  title={selectedBook.title}
+                  category={selectedBook.category_name}
+                  size="md"
+                />
                 <div style={{ flex: 1 }}>
                   <h2 style={{ fontSize: 'var(--font-size-xl)', marginBottom: '6px' }}>{selectedBook.title}</h2>
                   <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)', marginBottom: '8px' }}>

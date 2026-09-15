@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { dashboardApi } from '../../api/dashboardApi';
+import BookCover from '../../components/common/BookCover';
 
 export default function AdminDashboard() {
   const { user } = useAuth();
@@ -414,6 +415,12 @@ export default function AdminDashboard() {
                       >
                         {idx + 1}
                       </div>
+                      <BookCover
+                        src={b.cover_image}
+                        title={b.title}
+                        category={b.category_name}
+                        size="xs"
+                      />
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {b.title}

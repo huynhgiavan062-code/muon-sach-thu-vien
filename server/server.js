@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
 const path = require('path');
+const fs = require('fs');
 const { initializeDatabase } = require('./config/database');
 
 const authRoutes = require('./routes/auth');
@@ -53,6 +54,10 @@ app.use(express.json());
 app.use(morgan('dev'));
 
 // Static files
+const coversDir = path.join(__dirname, 'uploads', 'covers');
+if (!fs.existsSync(coversDir)) {
+  fs.mkdirSync(coversDir, { recursive: true });
+}
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Routes

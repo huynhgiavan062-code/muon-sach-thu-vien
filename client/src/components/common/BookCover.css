@@ -1,0 +1,229 @@
+/* BookCover Component Styles */
+.book-cover-container {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.08);
+  background-color: var(--bg-secondary, #f1f5f9);
+  flex-shrink: 0;
+  user-select: none;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.book-cover-container:hover {
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18), 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* Sizing presets */
+.book-cover-xs {
+  width: 32px;
+  height: 44px;
+  border-radius: 4px;
+}
+
+.book-cover-sm {
+  width: 44px;
+  height: 60px;
+  border-radius: 4px;
+}
+
+.book-cover-md {
+  width: 72px;
+  height: 98px;
+  border-radius: 6px;
+}
+
+.book-cover-lg {
+  width: 130px;
+  height: 180px;
+  border-radius: 8px;
+}
+
+.book-cover-xl {
+  width: 170px;
+  height: 238px;
+  border-radius: 10px;
+}
+
+.book-cover-responsive {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  height: auto;
+}
+
+/* Book Image */
+.book-cover-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: opacity 0.3s ease;
+}
+
+.book-cover-img.loading {
+  opacity: 0;
+}
+
+.book-cover-img.loaded {
+  opacity: 1;
+}
+
+/* Shimmer Loading State */
+.book-cover-shimmer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+  background-size: 200% 100%;
+  animation: bookCoverShimmer 1.5s infinite;
+}
+
+@keyframes bookCoverShimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Fallback Design when no cover or broken */
+.book-cover-fallback {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 8px 6px;
+  color: #ffffff;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* Book Spine 3D Effect */
+.book-cover-fallback::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 10px;
+  height: 100%;
+  background: linear-gradient(to right, rgba(0, 0, 0, 0.35) 0%, rgba(0, 0, 0, 0.15) 60%, rgba(255, 255, 255, 0.25) 85%, transparent 100%);
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Subtle corner overlay */
+.book-cover-fallback::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.fallback-header {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.fallback-badge {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  background: rgba(0, 0, 0, 0.25);
+  padding: 2px 5px;
+  border-radius: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 90%;
+}
+
+.fallback-center {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  margin: auto 0;
+  padding: 0 4px;
+}
+
+.fallback-icon {
+  opacity: 0.9;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+  transition: transform 0.2s ease;
+}
+
+.book-cover-container:hover .fallback-icon {
+  transform: scale(1.08);
+}
+
+.fallback-title {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+  margin-top: 6px;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+.fallback-footer {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 8px;
+  opacity: 0.8;
+  padding-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.fallback-brand {
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+/* Extra small / Small size adjustments */
+.book-cover-xs .fallback-badge,
+.book-cover-xs .fallback-footer,
+.book-cover-xs .fallback-title,
+.book-cover-sm .fallback-badge,
+.book-cover-sm .fallback-footer,
+.book-cover-sm .fallback-title {
+  display: none;
+}
+
+.book-cover-xs .book-cover-fallback,
+.book-cover-sm .book-cover-fallback {
+  padding: 0;
+  justify-content: center;
+  align-items: center;
+}
+
+.book-cover-xs .fallback-center,
+.book-cover-sm .fallback-center {
+  margin: 0;
+}

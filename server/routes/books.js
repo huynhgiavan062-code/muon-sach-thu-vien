@@ -1,5 +1,7 @@
 const express = require('express');
 const router = express.Router();
+const path = require('path');
+const fs = require('fs');
 const Book = require('../models/Book');
 const Author = require('../models/Author');
 const Category = require('../models/Category');
@@ -7,6 +9,46 @@ const Publisher = require('../models/Publisher');
 const Shelf = require('../models/Shelf');
 const { authMiddleware } = require('../middleware/auth');
 const { authorize } = require('../middleware/authorize');
+const { uploadCoverMiddleware } = require('../middleware/upload');
+
+// Hàm an toàn xóa file ảnh cũ nếu thuộc thư mục uploads/covers
+function safeDeleteCover(coverPath) {
+  if (!coverPath || typeof coverPath !== 'string') return;
+  if (!coverPath.startsWith('/uploads/covers/')) return;
+  try {
+    const filename = path.basename(coverPath);
+    const fullPath = path.join(__dirname, '..', 'uploads', 'covers', filename);
+    if (fs.existsSync(fullPath)) {
+      fs.unlinkSync(fullPath);
+    }
+  } catch (err) {
+    console.warn('Không thể xóa ảnh cũ:', err);
+  }
+}
+
+// POST /api/books/upload-cover - Upload ảnh bìa sách (Admin only)
+router.post('/upload-cover', authMiddleware, authorize('admin'), uploadCoverMiddleware, (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Vui lòng chọn file hình ảnh để tải lên.' });
+    }
+
+    // Trả về đường dẫn web tương đối
+    const coverUrl = `/uploads/covers/${req.file.filename}`;
+    res.json({
+      message: 'Tải ảnh bìa lên thành công.',
+      url: coverUrl,
+      file: {
+        filename: req.file.filename,
+        size: req.file.size,
+        mimetype: req.file.mimetype
+      }
+    });
+  } catch (err) {
+    console.error('Lỗi khi tải ảnh bìa lên:', err);
+    res.status(500).json({ error: 'Lỗi hệ thống khi tải ảnh bìa.' });
+  }
+});
 
 // GET /api/books/meta/all - Fetch dropdown metadata
 router.get('/meta/all', async (req, res) => {
@@ -208,6 +250,11 @@ router.put('/:id', authMiddleware, authorize('admin'), (req, res) => {
       updateData.available_quantity = newAvail;
     }
 
+    // Nếu ảnh bìa thay đổi hoặc bị xóa, dọn dẹp file ảnh cũ
+    if (cover_image !== undefined && existing.cover_image && existing.cover_image !== cover_image) {
+      safeDeleteCover(existing.cover_image);
+    }
+
     Book.update(bookId, updateData);
     const updatedBook = Book.findById(bookId);
     res.json({ message: 'Cập nhật thông tin sách thành công.', book: updatedBook });
@@ -227,6 +274,9 @@ router.delete('/:id', authMiddleware, authorize('admin'), (req, res) => {
     }
 
     Book.delete(bookId);
+    if (existing.cover_image) {
+      safeDeleteCover(existing.cover_image);
+    }
     res.json({ message: `Đã xóa sách "${existing.title}" thành công.` });
   } catch (err) {
     console.error('Error deleting book:', err);

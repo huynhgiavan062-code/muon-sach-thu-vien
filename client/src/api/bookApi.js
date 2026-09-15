@@ -28,6 +28,12 @@ export const bookApi = {
     return api.delete(`/books/${id}`);
   },
 
+  uploadCover(file) {
+    const formData = new FormData();
+    formData.append('cover', file);
+    return api.upload('/books/upload-cover', formData);
+  },
+
   getMetadata() {
     return api.get('/books/meta/all');
   },

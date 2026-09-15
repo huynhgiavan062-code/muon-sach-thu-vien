@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { bookApi } from '../../api/bookApi';
 import { useToast } from '../../contexts/ToastContext';
+import BookCover from '../../components/common/BookCover';
+import BookCoverUpload from '../../components/common/BookCoverUpload';
 
 export default function BookManagement() {
   const toast = useToast();
@@ -49,6 +51,29 @@ export default function BookManagement() {
   };
   const [formData, setFormData] = useState(initialForm);
   const [formError, setFormError] = useState('');
+
+  // Trạng thái upload ảnh bìa
+  const [selectedCoverFile, setSelectedCoverFile] = useState(null);
+  const [coverPreviewUrl, setCoverPreviewUrl] = useState(null);
+  const [coverRemoved, setCoverRemoved] = useState(false);
+
+  const handleCoverFileSelect = (file) => {
+    if (coverPreviewUrl) {
+      URL.revokeObjectURL(coverPreviewUrl);
+    }
+    setSelectedCoverFile(file);
+    setCoverPreviewUrl(URL.createObjectURL(file));
+    setCoverRemoved(false);
+  };
+
+  const handleCoverRemove = () => {
+    if (coverPreviewUrl) {
+      URL.revokeObjectURL(coverPreviewUrl);
+    }
+    setSelectedCoverFile(null);
+    setCoverPreviewUrl(null);
+    setCoverRemoved(true);
+  };
 
   // Fetch metadata once
   useEffect(() => {
@@ -102,6 +127,10 @@ export default function BookManagement() {
 
   // Open Add Modal
   const handleOpenAdd = () => {
+    if (coverPreviewUrl) URL.revokeObjectURL(coverPreviewUrl);
+    setSelectedCoverFile(null);
+    setCoverPreviewUrl(null);
+    setCoverRemoved(false);
     setFormData(initialForm);
     setFormError('');
     setShowAddModal(true);
@@ -109,6 +138,10 @@ export default function BookManagement() {
 
   // Open Edit Modal
   const handleOpenEdit = (book) => {
+    if (coverPreviewUrl) URL.revokeObjectURL(coverPreviewUrl);
+    setSelectedCoverFile(null);
+    setCoverPreviewUrl(null);
+    setCoverRemoved(false);
     setActiveBook(book);
     setFormData({
       book_code: book.book_code,
@@ -159,7 +192,16 @@ export default function BookManagement() {
 
     setSubmitting(true);
     try {
-      await bookApi.createBook(formData);
+      let coverUrl = null;
+      if (selectedCoverFile) {
+        const uploadRes = await bookApi.uploadCover(selectedCoverFile);
+        coverUrl = uploadRes.url;
+      }
+
+      await bookApi.createBook({
+        ...formData,
+        cover_image: coverUrl
+      });
       toast.success('Thêm sách mới thành công!');
       setShowAddModal(false);
       fetchBooks(1);
@@ -186,7 +228,18 @@ export default function BookManagement() {
 
     setSubmitting(true);
     try {
-      await bookApi.updateBook(activeBook.id, formData);
+      let coverUrl = activeBook.cover_image;
+      if (selectedCoverFile) {
+        const uploadRes = await bookApi.uploadCover(selectedCoverFile);
+        coverUrl = uploadRes.url;
+      } else if (coverRemoved) {
+        coverUrl = null;
+      }
+
+      await bookApi.updateBook(activeBook.id, {
+        ...formData,
+        cover_image: coverUrl
+      });
       toast.success('Cập nhật thông tin sách thành công!');
       setShowEditModal(false);
       fetchBooks(pagination.page);
@@ -346,12 +399,22 @@ export default function BookManagement() {
                         </strong>
                       </td>
                       <td>
-                        <div style={{ fontWeight: 'var(--font-weight-medium)', color: 'var(--color-text)' }}>
-                          {book.title}
-                        </div>
-                        <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)' }}>
-                          Tác giả: {book.author_name || 'Chưa cập nhật'}
-                          {book.isbn && ` • ISBN: ${book.isbn}`}
+                        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                          <BookCover
+                            src={book.cover_image}
+                            title={book.title}
+                            category={book.category_name}
+                            size="sm"
+                          />
+                          <div>
+                            <div style={{ fontWeight: 'var(--font-weight-medium)', color: 'var(--color-text)' }}>
+                              {book.title}
+                            </div>
+                            <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)' }}>
+                              Tác giả: {book.author_name || 'Chưa cập nhật'}
+                              {book.isbn && ` • ISBN: ${book.isbn}`}
+                            </div>
+                          </div>
                         </div>
                       </td>
                       <td>
@@ -462,6 +525,15 @@ export default function BookManagement() {
                     ⚠ {formError}
                   </div>
                 )}
+
+                <BookCoverUpload
+                  selectedFile={selectedCoverFile}
+                  previewUrl={coverPreviewUrl}
+                  onFileSelect={handleCoverFileSelect}
+                  onRemove={handleCoverRemove}
+                  bookTitle={formData.title}
+                  category={categories.find(c => c.id === Number(formData.category_id))?.name || ''}
+                />
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '12px' }}>
                   <div className="form-group">
@@ -628,6 +700,16 @@ export default function BookManagement() {
                   </div>
                 )}
 
+                <BookCoverUpload
+                  currentCover={coverRemoved ? '' : activeBook.cover_image}
+                  selectedFile={selectedCoverFile}
+                  previewUrl={coverPreviewUrl}
+                  onFileSelect={handleCoverFileSelect}
+                  onRemove={handleCoverRemove}
+                  bookTitle={formData.title}
+                  category={categories.find(c => c.id === Number(formData.category_id))?.name || activeBook.category_name || ''}
+                />
+
                 <div className="form-group">
                   <label className="form-label">Tên sách *</label>
                   <input
@@ -774,9 +856,12 @@ export default function BookManagement() {
             </div>
             <div className="modal-body">
               <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start', marginBottom: '20px' }}>
-                <div style={{ width: '80px', height: '110px', background: 'var(--color-primary-bg)', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '36px', color: 'var(--color-primary)' }}>
-                  📖
-                </div>
+                <BookCover
+                  src={activeBook.cover_image}
+                  title={activeBook.title}
+                  category={activeBook.category_name}
+                  size="md"
+                />
                 <div style={{ flex: 1 }}>
                   <h2 style={{ fontSize: 'var(--font-size-xl)', marginBottom: '6px' }}>{activeBook.title}</h2>
                   <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)', marginBottom: '8px' }}>
